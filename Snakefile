@@ -26,7 +26,10 @@ rule all:
 	input:
 		"results/multiqc/multiqc.html"
 
-# now we make a rule for fastqc, that just matches the fqbase wildcard
+# now we make a rule for fastqc, that just matches the fqbase wildcard.
+# We run each, separately in a temp directory, because the snakemake wrapper
+# for this notes that race conditions can occur if running multiple instances
+# in the same directory...
 rule fastqc:
 	input:
 		fq = r"{dir}/{{fqbase}}.fq.gz".format(dir = INDIR)
@@ -34,17 +37,22 @@ rule fastqc:
 		html = "results/fastqc_orig/{fqbase}_fastqc.html",
 		zipf = "results/fastqc_orig/{fqbase}_fastqc.zip"
 	log:
-		"results/logs/fastqc/{fqbase}.log"
+		fqc = "results/logs/fastqc/{fqbase}.log",
+		mv = "results/logs/fastqc/{fqbase}-mv.log"
 	conda:
 		"envs/fastqc.yaml"
 	shell:
-		"fastqc -o results/fastqc_orig {input.fq} > {log} 2>&1"
+		" tempdir=$(mktemp -d); "
+		" fastqc -o $tempdir {input.fq} > {log.fqc} 2>&1; "
+		" mv $tempdir/{wildcards.fqbase}_fastqc.html {output.html} 2> {log.mv}; "
+		" mv $tempdir/{wildcards.fqbase}_fastqc.zip {output.zipf}; 2>> {log.mv}; "
 
 
 
 # multiqc is effectively an aggregation step, so we want its inputs
 # to be all the fastqc.zip files that would come from expanding our IDS
-# variable.
+# variable. Note that aggregation always involves
+# expanding the **input** of a rule.
 rule multiqc:
 	input:
 		expand("results/fastqc_orig/{fqbase}_fastqc.zip", fqbase=IDS)

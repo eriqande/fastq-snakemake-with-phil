@@ -3,3 +3,5 @@
 .RData
 .Ruserdata
 from_phil
+.snakemake
+results
